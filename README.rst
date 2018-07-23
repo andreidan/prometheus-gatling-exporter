@@ -1,3 +1,4 @@
+===========================
 prometheus-gatling-exporter
 ===========================
 
@@ -39,3 +40,21 @@ Example::
     # HELP loadgenerator_summary
     # TYPE loadgenerator_summary gauge
     loadgenerator_summary{status="Failure",sim_id="Select_GroupBy_StrShort"} 0.0
+
+
+Usage
+=====
+Prometheus ingests new metrics by scraping http endpoints. The gatling exporter
+will start a http server (default port is ``9102``) for prometheus to scrape.
+When the exporter is started it will start processing the *new entries* in the
+simulation log file (``tail -f``), and store them in an internal buffer (the
+length of the buffer is configurable using ``--buffer_len`` and defaults to
+``30_000``) until prometheus scrapes them.
+Old entries in the buffer will be replaced by new simulation entries if the
+metrics are not scraped for a long enough time, in order to respect the
+configured buffer length.
+
+In order to start the exporter you'll need to provide the path towards the
+gatling simulation file using ``-s`` Eg.
+
+``python gatling_exporter.py -s /opt/gatling-charts-highcharts-bundle-2.3.1/results/cratedb-1532095744058/simulation.log``

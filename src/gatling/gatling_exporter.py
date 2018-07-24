@@ -9,6 +9,7 @@ import subprocess
 import time
 from datetime import datetime
 from collections import deque
+from glob import glob
 from prometheus_client import start_http_server
 from prometheus_client.core import GaugeMetricFamily, REGISTRY
 
@@ -64,6 +65,9 @@ class GatlingExporter(object):
                     request_status = entry_parts[6]
                     operation_response_time = int(entry_parts[5]) - int(entry_parts[4])
                     op_type = entry_parts[1]
+
+                    logger.debug("exporting entry with status=%s and type=%s",
+                                 request_status, op_type)
 
                     success_count_key = (op_type, 'Success')
                     if success_count_key not in self.operations_summary:
@@ -159,11 +163,16 @@ def main():
     logger.info(args)
 
     log_buffer = deque(maxlen=args.buffer_len)
-    REGISTRY.register(GatlingExporter(args.simulation_log_path, log_buffer))
 
+    paths = glob(args.simulation_log_path)
+    if len(paths) is not 1:
+        raise SystemExit('Please specify only one path to a simulation. Got %s' % paths)
+    expanded_sim_log_path = paths[0]
+
+    REGISTRY.register(GatlingExporter(expanded_sim_log_path, log_buffer))
     start_http_server(args.port)
 
-    f = subprocess.Popen(['tail', '-n0', '-f', args.simulation_log_path],
+    f = subprocess.Popen(['tail', '-n0', '-f', expanded_sim_log_path],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     while True:
         line = f.stdout.readline().decode('UTF-8').strip()

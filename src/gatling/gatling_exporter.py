@@ -35,6 +35,7 @@ class GatlingExporter(object):
     def __init__(self, simulation_log_path, log_buffer):
         self.log_buffer = log_buffer
         self.operations_summary = dict()
+        self.aggregated_errors = dict()
         logger.debug(
             'init gatling exporter for simulation=%s',
             simulation_log_path)
@@ -52,7 +53,8 @@ class GatlingExporter(object):
                 log_entry = log_buffer.popleft()
                 # entry parts structure is as follows
                 # index 0 - the type of metric - we're interested in REQUEST
-                # index 1 - type of operation (eg. select, insert etc)
+                # index 1 - type of operation (eg. select, insert etc) as
+                #           indicated by the scenario_id
                 # index 2 - count of operation execution
                 # index 4 - start timestamp
                 # index 5 - end timestamp
@@ -64,45 +66,48 @@ class GatlingExporter(object):
                 if entry_parts[0] == 'REQUEST':
                     request_status = entry_parts[6]
                     operation_response_time = int(entry_parts[5]) - int(entry_parts[4])
-                    op_type = entry_parts[1]
+                    sim_id = entry_parts[1]
 
                     logger.debug("exporting entry with status=%s and type=%s",
-                                 request_status, op_type)
+                                 request_status, sim_id)
 
-                    success_count_key = (op_type, 'Success')
+                    success_count_key = (sim_id, 'Success')
                     if success_count_key not in self.operations_summary:
                         self.operations_summary[success_count_key] = 0
 
-                    failure_count_key = (op_type, 'Failure')
+                    failure_count_key = (sim_id, 'Failure')
                     if failure_count_key not in self.operations_summary:
                         self.operations_summary[failure_count_key] = 0
 
-                    status = 'Success'
                     labels = ['sim_id', 'status']
                     custom_metrics = []
                     if request_status == 'OK':
                         self.operations_summary[success_count_key] = self.operations_summary.get(success_count_key) + 1
+                        metrics = [sim_id, 'Success']
+                        c = GaugeMetricFamily('loadgenerator',
+                                              'loadgenerator statements response time',
+                                              labels=labels)
+                        c.add_metric(metrics, operation_response_time)
+                        yield c
                     else:
                         self.operations_summary[failure_count_key] = self.operations_summary.get(failure_count_key) + 1
-                        status = 'Failure'
-                        labels.append('error')
                         error = ' '.join(x.strip() for x in entry_parts[8:])
-                        custom_metrics.append(error)
+                        self.aggregated_errors[(error, sim_id)] = self.aggregated_errors.get((error, sim_id), 0) + 1
 
-                    metrics = [op_type, status]
-                    if custom_metrics:
-                        metrics.extend(custom_metrics)
-
-                    c = GaugeMetricFamily('loadgenerator',
-                                          'loadgenerator statements response time',
-                                          labels=labels)
-                    c.add_metric(metrics, operation_response_time)
-                    yield c
                 else:
                     continue
 
         except IndexError:
             logger.debug('drained log buffer. yield metrics')
+
+        for key, value in self.aggregated_errors.items():
+            labels = ['error', 'sim_id', 'status']
+            c = GaugeMetricFamily('loadgenerator',
+                                  'loadgenerator aggregated errors count',
+                                  labels=labels)
+            metrics = [key[0], key[1], 'Failure']
+            c.add_metric(metrics, value)
+            yield c
 
         summary_labels = ['sim_id', 'status']
         for key, value in self.operations_summary.items():

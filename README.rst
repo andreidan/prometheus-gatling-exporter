@@ -5,9 +5,10 @@ prometheus-gatling-exporter
 This exporter parses the output of the Gatling (v2.3.1) ``simulation.log`` file.
 It will report the response time for every operation under the
 ``loadgenerator`` metric using the ``status`` (which can be ``Success`` or
-``Failure``), ``sim_id`` (indicating the simulation that's being executed) and
-for the failed operations the ``error`` (containing the details around the
-failure reason) labels.
+``Failure``) and ``sim_id`` (indicating the simulation that's being executed).
+For the failed operations we'll report a count of the number of errors that
+occured grouped by the type of ``error`` and simulation id (the ``status``
+label will indicate ``Failure`` for these aggregates in order to aid filtering)
 A ``loadgenerator_summary`` metric is also generated and it reports the number
 of successful and failed executed statements.
 
@@ -31,9 +32,19 @@ Example::
     # HELP loadgenerator_summary
     # TYPE loadgenerator_summary gauge
     loadgenerator_summary{status="Success",sim_id="Insert"} 91.0
-    # HELP loadgenerator_summary
-    # TYPE loadgenerator_summary gauge
-    loadgenerator_summary{status="Failure",sim_id="Insert"} 0.0
+    loadgenerator{error="Can't assign requested address: localhost/127.0.0.1:4200",sim_id="Insert",status="Failure"} 1668.0
+    # HELP loadgenerator loadgenerator aggregated errors count
+    # TYPE loadgenerator gauge
+    loadgenerator{error="Can't assign requested address: localhost/127.0.0.1:4200",sim_id="GroupBy_Int",status="Failure"} 21.0
+    # HELP loadgenerator loadgenerator aggregated errors count
+    # TYPE loadgenerator gauge
+    loadgenerator{error="Can't assign requested address: localhost/127.0.0.1:4200",sim_id="GroupBy_Long",status="Failure"} 19.0
+    # HELP loadgenerator loadgenerator aggregated errors count
+    # TYPE loadgenerator gauge
+    loadgenerator{error="Can't assign requested address: localhost/127.0.0.1:4200",sim_id="GroupBy_StrShort",status="Failure"} 19.0
+    # HELP loadgenerator loadgenerator aggregated errors count
+    # TYPE loadgenerator gauge
+    loadgenerator{error="Can't assign requested address: localhost/127.0.0.1:4200",sim_id="GroupBy_StrLong",status="Failure"} 19.0
     # HELP loadgenerator_summary
     # TYPE loadgenerator_summary gauge
     loadgenerator_summary{status="Success",sim_id="Select_GroupBy_StrShort"} 272.0
